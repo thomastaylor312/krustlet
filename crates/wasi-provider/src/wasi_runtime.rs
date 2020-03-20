@@ -89,33 +89,11 @@ impl WasiRuntime {
         )
         .await??;
 
-        // Build the WASI instance and then generate a list of WASI modules
-        let mut ctx_builder_snapshot = WasiCtxBuilder::new();
-        // For some reason if I didn't split these out, the compiler got mad
-        let mut ctx_builder_snapshot = ctx_builder_snapshot
-            .args(&self.args)
-            .envs(&self.env)
-            .stdout(output_write.try_clone()?)
-            .stderr(output_write.try_clone()?);
-        let mut ctx_builder_unstable = wasi_common::old::snapshot_0::WasiCtxBuilder::new()
-            .args(&self.args)
-            .envs(&self.env)
-            .stdout(output_write.try_clone()?)
-            .stderr(output_write);
-
-        for (key, value) in self.dirs.iter() {
-            let guest_dir = value.as_ref().unwrap_or(key);
-            ctx_builder_snapshot = ctx_builder_snapshot.preopened_dir(preopen_dir(key)?, guest_dir);
-            ctx_builder_unstable = ctx_builder_unstable.preopened_dir(preopen_dir(key)?, guest_dir);
-        }
-        let wasi_ctx_snapshot = ctx_builder_snapshot.build()?;
-        let wasi_ctx_unstable = ctx_builder_unstable.build()?;
-
         let (status_sender, status_recv) = watch::channel(ContainerStatus::Waiting {
             timestamp: chrono::Utc::now(),
             message: "No status has been received from the process".into(),
         });
-        let handle = self.spawn_wasmtime(status_sender, wasi_ctx_snapshot, wasi_ctx_unstable);
+        let handle = self.spawn_wasmtime(status_sender, output_write);
 
         Ok(RuntimeHandle::new(
             tokio::fs::File::from_std(output_read),
@@ -130,13 +108,40 @@ impl WasiRuntime {
     fn spawn_wasmtime(
         &self,
         status_sender: Sender<ContainerStatus>,
-        wasi_ctx_snapshot: wasi_common::WasiCtx,
-        wasi_ctx_unstable: wasi_common::old::snapshot_0::WasiCtx,
+        output_write: std::fs::File,
     ) -> JoinHandle<anyhow::Result<()>> {
         // Clone the module data Arc so it can be moved
         let module_data = self.module_data.clone();
 
+        let args = self.args.clone();
+        let env = self.env.clone();
+        let dirs = self.dirs.clone();
+
         tokio::task::spawn_blocking(move || -> anyhow::Result<_> {
+            // Build the WASI instance and then generate a list of WASI modules
+            let mut ctx_builder_snapshot = WasiCtxBuilder::new();
+            // For some reason if I didn't split these out, the compiler got mad
+            let mut ctx_builder_snapshot = ctx_builder_snapshot
+                .args(&args)
+                .envs(&env)
+                .stdout(output_write.try_clone()?)
+                .stderr(output_write.try_clone()?);
+            let mut ctx_builder_unstable = wasi_common::old::snapshot_0::WasiCtxBuilder::new()
+                .args(&args)
+                .envs(&env)
+                .stdout(output_write.try_clone()?)
+                .stderr(output_write);
+
+            for (key, value) in dirs {
+                let guest_dir = value.unwrap_or_else(|| key.clone());
+                ctx_builder_snapshot =
+                    ctx_builder_snapshot.preopened_dir(preopen_dir(&key)?, guest_dir.clone());
+                ctx_builder_unstable =
+                    ctx_builder_unstable.preopened_dir(preopen_dir(&key)?, guest_dir);
+            }
+            let wasi_ctx_snapshot = ctx_builder_snapshot.build()?;
+            let wasi_ctx_unstable = ctx_builder_unstable.build()?;
+
             let engine = wasmtime::Engine::default();
             let store = wasmtime::Store::new(&engine);
             let wasi_snapshot = Wasi::new(&store, wasi_ctx_snapshot);
