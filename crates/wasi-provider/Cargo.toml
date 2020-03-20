@@ -17,9 +17,9 @@ anyhow = "1.0"
 async-trait = "0.1.24"
 kube =  "0.29.0" 
 log = "0.4"
-wasmtime = { git = "https://github.com/bytecodealliance/wasmtime" }
-wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime" }
-wasi-common = { git = "https://github.com/bytecodealliance/wasmtime" }
+wasmtime = { git = "https://github.com/bytecodealliance/wasmtime", tag = "dev" }
+wasmtime-wasi = { git = "https://github.com/bytecodealliance/wasmtime", tag = "dev" }
+wasi-common = { git = "https://github.com/bytecodealliance/wasmtime", tag = "dev" }
 tempfile = "3.1"
 kubelet = { path = "../kubelet", version = "0.1.0" }
 wat = "1.0"
