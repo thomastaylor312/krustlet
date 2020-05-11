@@ -1,0 +1,14 @@
+[package]
+name = "result"
+version = "0.1.0"
+authors = ["Taylor Thomas <taylor.thomas@microsoft.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wascc-actor = "0.6"
+wascc-codec = "0.6"
+serde = "1.0"
+serde_json = "1.0"

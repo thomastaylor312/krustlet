@@ -37,7 +37,7 @@ documentation. Once those are installed, `wascap` and `nk` can be installed with
 
 ```
 cargo install wascap --features "cli"
-cargo install nk --features "cli"
+cargo install nkeys --features "cli"
 ```
 
 Once complete, run `make` to compile the example.

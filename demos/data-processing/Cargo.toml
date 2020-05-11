@@ -1,0 +1,16 @@
+[package]
+name = "data-processing"
+version = "0.1.0"
+authors = ["Taylor Thomas <taylor.thomas@microsoft.com>"]
+edition = "2018"
+
+[[bin]]
+name = "processor"
+path = "src/processor.rs"
+
+[dependencies]
+
+[workspace]
+members = [
+    "crates/*"
+]

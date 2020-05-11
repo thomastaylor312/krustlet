@@ -1,7 +1,7 @@
 [package]
 name = "uppercase"
 version = "0.0.1"
-authors = ["Brian Ketelsen <mail@bjk.fyi"]
+authors = ["Brian Ketelsen <mail@bjk.fyi>"]
 edition = "2018"
 
 [lib]
