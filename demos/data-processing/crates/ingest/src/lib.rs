@@ -4,7 +4,6 @@ extern crate wascc_codec;
 use actor::prelude::*;
 
 use wascc_codec::blobstore::Blob;
-use wascc_codec::serialize;
 
 actor_handlers! {
     codec::http::OP_HANDLE_REQUEST => ingest,
@@ -12,7 +11,7 @@ actor_handlers! {
 }
 const FILE_NAME: &str = "work";
 
-fn ingest(r: codec::http::Request) -> CallResult {
+fn ingest(r: codec::http::Request) -> HandlerResult<codec::http::Response> {
     // k8s volumes are mounted into the waSCC runtime using the same volume mount name
     let first_partition = objectstore::host("partition-1");
     let second_partition = objectstore::host("partition-2");
@@ -41,12 +40,12 @@ fn ingest(r: codec::http::Request) -> CallResult {
             let transfer =
                 second_partition.start_upload(&blob, chunk2.len() as u64, chunk2.len() as u64)?;
             second_partition.upload_chunk(&transfer, 0, &chunk2)?;
-            Ok(serialize(codec::http::Response::ok())?)
+            Ok(codec::http::Response::ok())
         }
-        _ => Ok(serialize(codec::http::Response::bad_request())?),
+        _ => Ok(codec::http::Response::bad_request()),
     }
 }
 
-fn health(_req: codec::core::HealthRequest) -> ReceiveResult {
-    Ok(vec![])
+fn health(_req: codec::core::HealthRequest) -> HandlerResult<()> {
+    Ok(())
 }

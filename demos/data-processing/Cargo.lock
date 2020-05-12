@@ -123,6 +123,9 @@ name = "serde"
 version = "1.0.110"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "99e7b308464d16b56eba9964e4972a3eee817760ab60d88c3f86e1fecb08204c"
+dependencies = [
+ "serde_derive",
+]
 
 [[package]]
 name = "serde_bytes"
@@ -180,9 +183,9 @@ checksum = "b5367d300ea3f87b7039211b2f3c3345f32156797c1e7ec09aba1f0970a575e0"
 
 [[package]]
 name = "wascc-actor"
-version = "0.6.0"
+version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ebc6308461d7bdfc232d20acf4b046bc387ac2d517ca0c1a6cf5bc9041d4dcb"
+checksum = "b07bfd990827c0c72904b2b8be1ccfc496f168a71651d24300f9a5a74de5ebcc"
 dependencies = [
  "lazy_static",
  "log",
