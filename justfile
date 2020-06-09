@@ -7,6 +7,10 @@ run: run-wascc
 build:
     cargo build
 
+docs:
+    cargo +nightly doc -p kubelet --open
+    cargo +nightly doc -p oci-distribution --open
+
 test:
     cargo fmt --all -- --check
     cargo clippy --workspace
