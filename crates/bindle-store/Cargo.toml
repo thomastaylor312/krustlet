@@ -1,0 +1,22 @@
+[package]
+name = "bindle-store"
+version = "0.1.0"
+authors = [
+    "Matt Butcher <matt.butcher@microsoft.com>",
+    "Matthew Fisher <matt.fisher@microsoft.com>",
+    "Radu Matei <radu.matei@microsoft.com>",
+    "Taylor Thomas <taylor.thomas@microsoft.com>",
+    "Brian Ketelsen <Brian.Ketelsen@microsoft.com>",
+    "Brian Hardock <Brian.Hardock@microsoft.com>",
+    "Ryan Levick <rylevick@microsoft.com>",
+    "Kevin Flansburg <kevin.flansburg@gmail.com>",
+]
+edition = "2018"
+
+[dependencies]
+bindle = { version = "0.3", default-features = false, features = ["client", "caching"] }
+kubelet = { path = "../kubelet", version = "0.6" }
+oci-distribution = { path = "../oci-distribution", version = "0.5" }
+anyhow = "1.0"
+tokio  = { version = "0.2", default-features = false, features = ["stream"] }
+async-trait = "0.1"

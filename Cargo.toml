@@ -83,7 +83,8 @@ members = [
     "crates/kubelet",
     "crates/oci-distribution",
     "crates/wasi-provider",
-    "crates/krator-derive"
+    "crates/krator-derive",
+    "crates/bindle-store"
 ]
 
 [[bin]]
