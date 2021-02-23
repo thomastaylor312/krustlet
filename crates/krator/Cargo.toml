@@ -47,6 +47,7 @@ futures = { version = "0.3", default-features = false }
 krator-derive = { version = "0.1", path = "../krator-derive", optional = true }
 warp = { version = "0.2", optional = true, features = ["tls"] }
 json-patch = { version = "0.2", optional = true }
+future-wrap = { path = "../future-wrap", version = "0.1" }
 
 [dev-dependencies]
 kube-derive = "0.42"

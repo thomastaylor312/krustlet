@@ -2,7 +2,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use futures::{StreamExt, TryStreamExt};
+use futures::{FutureExt, StreamExt, TryStreamExt};
 use log::{debug, error, info, warn};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::Notify;
@@ -130,6 +130,7 @@ impl<O: Operator> OperatorRuntime<O> {
             }
             _ => return Err(anyhow::anyhow!("Got non-apply event when starting pod")),
         };
+        let manifest_name = manifest.name();
 
         let (manifest_tx, manifest_rx) = Manifest::new(manifest);
         let reflector_deleted = Arc::clone(&deleted);
@@ -138,61 +139,69 @@ impl<O: Operator> OperatorRuntime<O> {
         // deleted flag) while the second awaits on the actual state machine, interrupts it on
         // deletion, and handles cleanup.
 
-        tokio::spawn(async move {
-            while let Some(event) = receiver.recv().await {
-                // Watch errors are handled before an event ever gets here, so it should always have
-                // an object
-                match event {
-                    Event::Applied(manifest) => {
-                        debug!(
-                            "Resource {} in namespace {:?} applied.",
-                            manifest.name(),
-                            manifest.namespace()
-                        );
-                        let meta = manifest.meta();
-                        if meta.deletion_timestamp.is_some() {
+        tokio::spawn(future_wrap::WrappedFuture::new(
+            format!("manifest_updater/{}", manifest_name),
+            async move {
+                while let Some(event) = receiver.recv().await {
+                    // Watch errors are handled before an event ever gets here, so it should always have
+                    // an object
+                    match event {
+                        Event::Applied(manifest) => {
+                            debug!(
+                                "Resource {} in namespace {:?} applied.",
+                                manifest.name(),
+                                manifest.namespace()
+                            );
+                            let meta = manifest.meta();
+                            if meta.deletion_timestamp.is_some() {
+                                reflector_deleted.notify_one();
+                            }
+                            match manifest_tx.send(manifest) {
+                                Ok(()) => (),
+                                Err(e) => {
+                                    warn!("Unable to broadcast manifest update: {:?}", e);
+                                    return;
+                                }
+                            }
+                        }
+                        Event::Deleted(manifest) => {
+                            // I'm not sure if this matters, we get notified of pod deletion with a
+                            // Modified event, and I think we only get this after *we* delete the pod.
+                            // There is the case where someone force deletes, but we want to go through
+                            // our normal terminate and deregister flow anyway.
+                            debug!(
+                                "Resource {} in namespace {:?} deleted.",
+                                manifest.name(),
+                                manifest.namespace()
+                            );
                             reflector_deleted.notify_one();
-                        }
-                        match manifest_tx.send(manifest) {
-                            Ok(()) => (),
-                            Err(e) => {
-                                warn!("Unable to broadcast manifest update: {:?}", e);
-                                return;
+                            match manifest_tx.send(manifest) {
+                                Ok(()) => (),
+                                Err(e) => {
+                                    warn!("Unable to broadcast manifest update: {:?}", e);
+                                    return;
+                                }
                             }
+                            break;
                         }
+                        _ => warn!("Resource got unexpected event, ignoring: {:?}", &event),
                     }
-                    Event::Deleted(manifest) => {
-                        // I'm not sure if this matters, we get notified of pod deletion with a
-                        // Modified event, and I think we only get this after *we* delete the pod.
-                        // There is the case where someone force deletes, but we want to go through
-                        // our normal terminate and deregister flow anyway.
-                        debug!(
-                            "Resource {} in namespace {:?} deleted.",
-                            manifest.name(),
-                            manifest.namespace()
-                        );
-                        reflector_deleted.notify_one();
-                        match manifest_tx.send(manifest) {
-                            Ok(()) => (),
-                            Err(e) => {
-                                warn!("Unable to broadcast manifest update: {:?}", e);
-                                return;
-                            }
-                        }
-                        break;
-                    }
-                    _ => warn!("Resource got unexpected event, ignoring: {:?}", &event),
                 }
             }
-        });
+            .boxed(),
+        ));
 
-        tokio::spawn(run_object_task::<O>(
-            self.client.clone(),
-            manifest_rx,
-            self.operator.shared_state().await,
-            object_state,
-            deleted,
-            Arc::clone(&self.operator),
+        tokio::spawn(future_wrap::WrappedFuture::new(
+            format!("task_runner/{}", manifest_name),
+            run_object_task::<O>(
+                self.client.clone(),
+                manifest_rx,
+                self.operator.shared_state().await,
+                object_state,
+                deleted,
+                Arc::clone(&self.operator),
+            )
+            .boxed(),
         ));
 
         Ok(sender)

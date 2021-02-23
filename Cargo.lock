@@ -887,6 +887,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3dcaa9ae7725d12cdb85b3ad99a434db70b468c09ded17e012d86b5c1010f7a7"
 
 [[package]]
+name = "future-wrap"
+version = "0.1.0"
+dependencies = [
+ "futures",
+]
+
+[[package]]
 name = "futures"
 version = "0.3.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1534,6 +1541,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "env_logger 0.8.3",
+ "future-wrap",
  "futures",
  "json-patch",
  "k8s-openapi 0.11.0",
@@ -1661,6 +1669,7 @@ dependencies = [
  "chrono",
  "dirs 3.0.1",
  "env_logger 0.4.3",
+ "future-wrap",
  "futures",
  "hostname",
  "http 0.2.3",
@@ -3997,6 +4006,7 @@ dependencies = [
  "async-trait",
  "backtrace",
  "chrono",
+ "future-wrap",
  "futures",
  "k8s-openapi 0.9.0",
  "krator",

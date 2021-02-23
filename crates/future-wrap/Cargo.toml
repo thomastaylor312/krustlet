@@ -1,0 +1,8 @@
+[package]
+name = "future-wrap"
+version = "0.1.0"
+authors = ["Taylor Thomas <taylor.thomas@microsoft.com>"]
+edition = "2018"
+
+[dependencies]
+futures = { version = "0.3", default-features = false }

@@ -39,6 +39,7 @@ tokio = { version = "1.0", features = ["fs", "macros", "io-util", "sync"] }
 chrono = { version = "0.4", features = ["serde"] }
 futures = "0.3"
 k8s-openapi = { version = "0.9", default-features = false, features = ["v1_18"] }
+future-wrap = { path = "../future-wrap", version = "0.1" }
 
 [dev-dependencies]
 oci-distribution = { path = "../oci-distribution", version = "0.5" }

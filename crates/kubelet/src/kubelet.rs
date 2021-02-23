@@ -7,7 +7,7 @@ use crate::plugin_watcher::PluginRegistry;
 use crate::provider::Provider;
 use crate::webserver::start as start_webserver;
 
-use futures::future::TryFutureExt;
+use futures::{future::TryFutureExt, FutureExt};
 use kube::api::ListParams;
 use log::{error, info, warn};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -64,21 +64,26 @@ impl<P: Provider> Kubelet<P> {
 
         // Flag to indicate graceful shutdown has started.
         let signal = Arc::new(AtomicBool::new(false));
-        let signal_task = tokio::spawn(start_signal_task(Arc::clone(&signal)));
+        let signal_task = tokio::spawn(future_wrap::WrappedFuture::new(
+            "signal_task",
+            start_signal_task(Arc::clone(&signal)).boxed(),
+        ));
 
-        let mut plugin_registrar =
-            tokio::spawn(start_plugin_registry(self.provider.plugin_registry()));
+        let mut plugin_registrar = tokio::spawn(future_wrap::WrappedFuture::new(
+            "plugin_registrar",
+            start_plugin_registry(self.provider.plugin_registry()).boxed(),
+        ));
 
         // Start the webserver
-        let mut webserver = tokio::spawn(start_webserver(
-            self.provider.clone(),
-            self.config.server_config.clone(),
+        let mut webserver = tokio::spawn(future_wrap::WrappedFuture::new(
+            "webserver",
+            start_webserver(self.provider.clone(), self.config.server_config.clone()).boxed(),
         ));
 
         // Start updating the node lease and status periodically
-        let mut node_updater = tokio::spawn(start_node_updater(
-            client.clone(),
-            self.config.node_name.clone(),
+        let mut node_updater = tokio::spawn(future_wrap::WrappedFuture::new(
+            "node_updater",
+            start_node_updater(client.clone(), self.config.node_name.clone()).boxed(),
         ));
 
         // If any of these tasks fail, we can initiate graceful shutdown.
@@ -107,10 +112,14 @@ impl<P: Provider> Kubelet<P> {
         });
 
         // Periodically checks for shutdown signal and cleans up resources gracefully if caught.
-        let mut signal_handler = tokio::spawn(start_signal_handler(
-            Arc::clone(&signal),
-            client.clone(),
-            self.config.node_name.clone(),
+        let mut signal_handler = tokio::spawn(future_wrap::WrappedFuture::new(
+            "signal_handler",
+            start_signal_handler(
+                Arc::clone(&signal),
+                client.clone(),
+                self.config.node_name.clone(),
+            )
+            .boxed(),
         ));
 
         let operator = PodOperator::new(Arc::clone(&self.provider), client.clone());
@@ -120,10 +129,14 @@ impl<P: Provider> Kubelet<P> {
             ..Default::default()
         };
         let mut operator_runtime = OperatorRuntime::new(&self.kube_config, operator, Some(params));
-        let mut operator_task = tokio::spawn(async move {
-            operator_runtime.start().await;
-            Ok::<(), anyhow::Error>(())
-        });
+        let mut operator_task = tokio::spawn(future_wrap::WrappedFuture::new(
+            "operator_task",
+            async move {
+                operator_runtime.start().await;
+                Ok::<(), anyhow::Error>(())
+            }
+            .boxed(),
+        ));
 
         // These must all be running for graceful shutdown. An error here exits ungracefully.
         let core = Box::pin(async {
