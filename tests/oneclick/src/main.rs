@@ -83,7 +83,7 @@ fn config_file_path_str(file_name: impl AsRef<std::path::Path>) -> String {
 
 fn build_workspace() -> anyhow::Result<()> {
     let build_result = std::process::Command::new("cargo")
-        .args(&["build"])
+        .args(&["build", "--release"])
         .output()?;
 
     if build_result.status.success() {
@@ -265,7 +265,7 @@ fn launch_kubelet(
     let port_arg = format!("{}", kubelet_port);
 
     let repo_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let bin_path = repo_root.join("target/debug").join(name);
+    let bin_path = repo_root.join("target/release").join(name);
 
     let stderr = std::fs::File::create(Path::new(LOG_DIR).join(format!("{}.stderr", name)))?;
 
