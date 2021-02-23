@@ -19,7 +19,7 @@ const PING: &str = "this is the Krustlet HTTP server";
 /// This is a primitive implementation of an HTTP provider for the internal API.
 pub(crate) async fn start<T: Provider>(
     provider: Arc<T>,
-    config: &ServerConfig,
+    config: ServerConfig,
 ) -> anyhow::Result<()> {
     let health = warp::get().and(warp::path("healthz")).map(|| PING);
     let ping = warp::get().and(warp::path::end()).map(|| PING);

@@ -7,7 +7,7 @@ use crate::plugin_watcher::PluginRegistry;
 use crate::provider::Provider;
 use crate::webserver::start as start_webserver;
 
-use futures::future::{FutureExt, TryFutureExt};
+use futures::future::TryFutureExt;
 use kube::api::ListParams;
 use log::{error, info, warn};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -64,21 +64,22 @@ impl<P: Provider> Kubelet<P> {
 
         // Flag to indicate graceful shutdown has started.
         let signal = Arc::new(AtomicBool::new(false));
-        let signal_task = start_signal_task(Arc::clone(&signal)).fuse().boxed();
+        let signal_task = tokio::spawn(start_signal_task(Arc::clone(&signal)));
 
-        let plugin_registrar = start_plugin_registry(self.provider.plugin_registry())
-            .fuse()
-            .boxed();
+        let mut plugin_registrar =
+            tokio::spawn(start_plugin_registry(self.provider.plugin_registry()));
 
         // Start the webserver
-        let webserver = start_webserver(self.provider.clone(), &self.config.server_config)
-            .fuse()
-            .boxed();
+        let mut webserver = tokio::spawn(start_webserver(
+            self.provider.clone(),
+            self.config.server_config.clone(),
+        ));
 
         // Start updating the node lease and status periodically
-        let node_updater = start_node_updater(client.clone(), self.config.node_name.clone())
-            .fuse()
-            .boxed();
+        let mut node_updater = tokio::spawn(start_node_updater(
+            client.clone(),
+            self.config.node_name.clone(),
+        ));
 
         // If any of these tasks fail, we can initiate graceful shutdown.
         let services = Box::pin(async {
@@ -86,27 +87,31 @@ impl<P: Provider> Kubelet<P> {
                 res = signal_task => if let Err(e) = res {
                     error!("Signal task completed with error {:?}", &e);
                 },
-                res = webserver => error!("Webserver task completed with result {:?}", &res),
-                res = node_updater => if let Err(e) = res {
+                res = &mut webserver => error!("Webserver task completed with result {:?}", &res),
+                res = &mut node_updater => if let Err(e) = res {
                     error!("Node updater task completed with error {:?}", &e);
                 },
-                res = plugin_registrar => if let Err(e) = res {
+                res = &mut plugin_registrar => if let Err(e) = res {
                     error!("Plugin registrar task completed with error {:?}", &e);
                 }
             };
+
+            // Kill tasks
+            webserver.abort();
+            node_updater.abort();
+            plugin_registrar.abort();
+
             // Use relaxed ordering because we just need other tasks to eventually catch the signal.
             signal.store(true, Ordering::Relaxed);
             Ok::<(), anyhow::Error>(())
         });
 
         // Periodically checks for shutdown signal and cleans up resources gracefully if caught.
-        let signal_handler = start_signal_handler(
+        let mut signal_handler = tokio::spawn(start_signal_handler(
             Arc::clone(&signal),
             client.clone(),
             self.config.node_name.clone(),
-        )
-        .fuse()
-        .boxed();
+        ));
 
         let operator = PodOperator::new(Arc::clone(&self.provider), client.clone());
         let node_selector = format!("spec.nodeName={}", &self.config.node_name);
@@ -115,27 +120,33 @@ impl<P: Provider> Kubelet<P> {
             ..Default::default()
         };
         let mut operator_runtime = OperatorRuntime::new(&self.kube_config, operator, Some(params));
-        let operator_task = operator_runtime.start().fuse().boxed();
+        let mut operator_task = tokio::spawn(async move {
+            operator_runtime.start().await;
+            Ok::<(), anyhow::Error>(())
+        });
 
         // These must all be running for graceful shutdown. An error here exits ungracefully.
         let core = Box::pin(async {
-            tokio::select! {
-                res = signal_handler => res.map_err(|e| {
+            let res = tokio::select! {
+                res = &mut signal_handler => res.map_err(|e| {
                     error!("Signal handler task joined with error {:?}", &e);
                     e
                 }),
-                _ = operator_task => {
+                res = &mut operator_task => {
                     warn!("Pod operator has completed");
-                    Ok(())
+                    res
                 }
-            }
+            };
+
+            operator_task.abort();
+            signal_handler.await.ok();
+            Ok(res)
         });
 
         // Services will not return an error, so this will wait for both to return, or core to
         // return an error. Services will return if signal is set because pod_informer will drop
         // error_sender and error_handler will exit.
-        tokio::try_join!(core, services)?;
-        Ok(())
+        tokio::try_join!(core, services)?.0?
     }
 }
 
